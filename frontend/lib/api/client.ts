@@ -114,6 +114,17 @@ export const generateShortScript = async (topic: string) => {
   }
 }
 
+export const askQuill = async (message: string) => {
+  const url = `${API_BASE_URL}/ask-quill`
+  try {
+    const response = await apiClient.post(url, { message })
+    return response.data
+  } catch (error) {
+    console.error('Ask Quill request failed:', error)
+    throw error
+  }
+}
+
 // Mock data for development
 export const mockUploadPDF = async (file: File) => {
   await new Promise(resolve => setTimeout(resolve, 2000))

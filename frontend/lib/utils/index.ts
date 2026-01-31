@@ -9,6 +9,17 @@ export function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36)
 }
 
+export function stripAssistantMarkdown(text: string): string {
+  if (!text) {
+    return ''
+  }
+
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^(\s*[-*•]\s+)/gm, '')
+}
+
 export function formatBytes(bytes: number, decimals = 2): string {
   if (bytes === 0) return '0 Bytes'
   

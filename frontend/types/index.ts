@@ -22,6 +22,12 @@ export interface ProgressData {
   incorrectAnswers: number
   quizzesTaken: number
   flashcardsStudied: number
+  topicStats?: Array<{
+    topic: string
+    correct: number
+    total: number
+    incorrect?: number
+  }>
 }
 
 export interface Language {

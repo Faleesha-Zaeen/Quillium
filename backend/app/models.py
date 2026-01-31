@@ -39,6 +39,12 @@ class ShortAudioRequest(BaseModel):
 class ShortAudioResponse(BaseModel):
     audio_url: str
 
+class AskQuillRequest(BaseModel):
+    message: str
+
+class AskQuillResponse(BaseModel):
+    reply: str
+
 class ProgressData(BaseModel):
     total_questions: int = 0
     correct_answers: int = 0

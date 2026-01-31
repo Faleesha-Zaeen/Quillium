@@ -2,12 +2,14 @@ import os
 from uuid import uuid4
 from dotenv import load_dotenv
 from openai import OpenAI
+import google.generativeai as genai
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(ENV_PATH)
 
-GEMINI_API_KEY_PRESENT = bool(os.getenv("GEMINI_API_KEY"))
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY_PRESENT = bool(GEMINI_API_KEY)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 print("✅ GEMINI_API_KEY loaded:", GEMINI_API_KEY_PRESENT)
 print("✅ OPENAI_API_KEY loaded:", bool(OPENAI_API_KEY))
@@ -30,6 +32,8 @@ from .models import (
     ShortScriptResponse,
     ShortAudioRequest,
     ShortAudioResponse,
+    AskQuillRequest,
+    AskQuillResponse,
 )
 from .pdf_processor import extract_text_from_pdf
 from .mcq_generator import make_mcqs, make_flashcards, init_translator, generate_short_form_script
@@ -131,6 +135,40 @@ async def get_languages():
         ]
     }
     return languages
+
+@app.post("/ask-quill", response_model=AskQuillResponse)
+async def ask_quill(payload: AskQuillRequest):
+    message = (payload.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    if not GEMINI_API_KEY:
+        logger.error("/ask-quill attempted without GEMINI_API_KEY")
+        return AskQuillResponse(reply="I'm having trouble answering right now. Please try again.")
+
+    prompt = (
+        "You are Quill, an AI tutor. Answer this student question clearly and concisely:\n\n"
+        f"{message}"
+    )
+
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.4,
+                "max_output_tokens": 512,
+            }
+        )
+        reply_text = (response.text or "").strip()
+        if not reply_text:
+            logger.warning("/ask-quill returned empty response from Gemini")
+            return AskQuillResponse(reply="I'm having trouble answering right now. Please try again.")
+        return AskQuillResponse(reply=reply_text)
+    except Exception as exc:
+        logger.error("/ask-quill failed: %s", exc)
+        return AskQuillResponse(reply="I'm having trouble answering right now. Please try again.")
 
 @app.post("/generate-short-script", response_model=ShortScriptResponse)
 async def generate_short_script_endpoint(payload: ShortScriptRequest):

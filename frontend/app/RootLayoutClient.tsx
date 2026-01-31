@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'   
 import { Header } from './components/layout/Header'
+import { AskQuillChat } from './components/ui/AskQuillChat'
 
 type View = 'hero' | 'upload' | 'quiz' | 'flashcards' | 'progress' | 'shorts'
 
@@ -110,6 +111,7 @@ export const RootLayoutClient = ({ children }: RootLayoutClientProps) => {
       <main className="flex-1">
         {children}
       </main>
+      <AskQuillChat />
     </>
   )
 }

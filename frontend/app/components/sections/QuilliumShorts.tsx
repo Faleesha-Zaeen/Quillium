@@ -1,380 +1,320 @@
-'use client'
+"use client";
 
-import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Clapperboard, Sparkles, ChevronLeft, Loader2 } from 'lucide-react'
-import { GradientText } from '../ui/GradientText'
-import { HolographicButton } from '../ui/HolographicButton'
-import { CyberBorder } from '../ui/CyberBorder'
-import { generateShortScript } from '../../../lib/api/client'
-
-declare global {
-  interface Window {
-    puter?: {
-      ai?: {
-        txt2speech?: (text: string) => Promise<string | { url?: string }>
-      }
-    }
-  }
-}
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Sparkles, ChevronLeft, Loader2, Pause, Volume2 } from "lucide-react";
+import { GradientText } from "../ui/GradientText";
+import { HolographicButton } from "../ui/HolographicButton";
+import { CyberBorder } from "../ui/CyberBorder";
+import { generateShortScript } from "../../../lib/api/client";
 
 interface QuilliumShortsProps {
-  onBack: () => void
-  language?: string
+  onBack: () => void;
+  language?: string;
 }
 
-export const QuilliumShorts = ({ onBack, language = 'English' }: QuilliumShortsProps) => {
-  const [topic, setTopic] = useState('')
-  const [showPreview, setShowPreview] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [script, setScript] = useState('')
-  const [isNarrationLoading, setIsNarrationLoading] = useState(false)
-  const [isNarrationPlaying, setIsNarrationPlaying] = useState(false)
-  const [ttsError, setTtsError] = useState<string | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [captionCues, setCaptionCues] = useState<Array<{ text: string; duration: number }>>([])
-  const [currentCaptionIndex, setCurrentCaptionIndex] = useState(0)
-  const captionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+const DEFAULT_SHORT_VIDEO = "subway.mp4";
 
-  const buildLocalFallbackScript = (subject: string) => {
-    const safeSubject = subject || 'this topic'
-    return `Here is a calm thirty second reminder about ${safeSubject}. Picture one clear scene, focus on why it matters right now, and carry that image with you for a quick review.`
-  }
+export const QuilliumShorts = ({ onBack, language = "English" }: QuilliumShortsProps) => {
+  const [topic, setTopic] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [script, setScript] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [selectedVideo, setSelectedVideo] = useState(DEFAULT_SHORT_VIDEO);
+  const [isNarrationLoading, setIsNarrationLoading] = useState(false);
+  const [isNarrationPlaying, setIsNarrationPlaying] = useState(false);
+  const [ttsError, setTtsError] = useState<string | null>(null);
 
-  const splitIntoSentences = (text: string) => {
-    const ESTIMATED_WORDS_PER_SECOND = 2.8
-    return text
-      .replace(/\s+/g, ' ')
-      .split(/(?<=[.!?])\s+/)
-      .map((sentence) => sentence.trim())
-      .filter(Boolean)
-      .map((sentence) => {
-        const wordCount = sentence.split(/\s+/).filter(Boolean).length || 1
-        const duration = Math.max(1200, Math.round((wordCount / ESTIMATED_WORDS_PER_SECOND) * 1000))
-        return { text: sentence, duration }
-      })
-  }
-
-  const clearCaptionTimer = () => {
-    if (captionTimerRef.current) {
-      clearTimeout(captionTimerRef.current)
-      captionTimerRef.current = null
-    }
-  }
-
-  const resetCaptions = () => {
-    clearCaptionTimer()
-    setCurrentCaptionIndex(0)
-  }
-
-  const startCaptionLoop = () => {
-    if (!captionCues.length) return
-    clearCaptionTimer()
-    const playCaption = (index: number) => {
-      if (index >= captionCues.length) {
-        clearCaptionTimer()
-        return
-      }
-      setCurrentCaptionIndex(index)
-      captionTimerRef.current = setTimeout(() => {
-        playCaption(index + 1)
-      }, captionCues[index].duration)
-    }
-
-    playCaption(0)
-  }
-
-  const applyScriptState = (value: string) => {
-    setScript(value)
-    setCaptionCues(splitIntoSentences(value))
-    setCurrentCaptionIndex(0)
-    clearCaptionTimer()
-  }
-
-  const stopNarration = () => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
-      audioRef.current = null
-    }
-    setIsNarrationPlaying(false)
-    resetCaptions()
-  }
-
-  const handleGenerateShort = async () => {
-    if (isGenerating) return
-    const subject = topic.trim() || 'Your topic'
-    setShowPreview(true)
-    setIsGenerating(true)
-    applyScriptState('')
-    setTtsError(null)
-    stopNarration()
-    try {
-      const response = await generateShortScript(subject)
-      const nextScript = response?.script?.trim()
-      applyScriptState(nextScript || buildLocalFallbackScript(subject))
-    } catch (error) {
-      console.error('Short script generation failed:', error)
-      applyScriptState(buildLocalFallbackScript(subject))
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
-  const waitForPuterTts = () => {
-    return new Promise<NonNullable<NonNullable<Window['puter']>['ai']>['txt2speech']>((resolve, reject) => {
-      if (typeof window === 'undefined') {
-        reject(new Error('Audio playback is unavailable in this environment.'))
-        return
-      }
-
-      const startedAt = Date.now()
-      const timeout = 2000
-      const pollInterval = 100
-
-      const poll = () => {
-        const tts = window.puter?.ai?.txt2speech
-        if (tts) {
-          resolve(tts)
-          return
-        }
-
-        if (Date.now() - startedAt >= timeout) {
-          reject(new Error('Puter text-to-speech is not available yet.'))
-          return
-        }
-
-        setTimeout(poll, pollInterval)
-      }
-
-      poll()
-    })
-  }
-
-  const handleNarrationClick = async () => {
-    if (!script || isNarrationLoading || isNarrationPlaying) {
-      return
-    }
-
-    setIsNarrationLoading(true)
-    setTtsError(null)
-
-    try {
-      const tts = await waitForPuterTts()
-      const result = await tts(script)
-
-      const audio = (() => {
-        if (typeof window !== 'undefined' && result instanceof window.Audio) {
-          return result
-        }
-        if (result && typeof (result as HTMLAudioElement)?.play === 'function') {
-          return result as HTMLAudioElement
-        }
-        if (typeof result === 'string') {
-          return new Audio(result)
-        }
-        const fallbackUrl = (result as { url?: string })?.url
-        if (fallbackUrl) {
-          return new Audio(fallbackUrl)
-        }
-        throw new Error('Missing audio response from Puter.')
-      })()
-
-      stopNarration()
-      audioRef.current = audio
-
-      audio.onended = () => {
-        setIsNarrationPlaying(false)
-        audioRef.current = null
-        resetCaptions()
-      }
-
-      audio.onerror = () => {
-        setTtsError('Playback failed. Please try again.')
-        stopNarration()
-      }
-
-      await audio.play()
-      setIsNarrationPlaying(true)
-      startCaptionLoop()
-    } catch (error) {
-      console.error('Puter TTS failed:', error)
-      setTtsError(error instanceof Error ? error.message : 'Unable to play narration. Please try again.')
-      stopNarration()
-    } finally {
-      setIsNarrationLoading(false)
-    }
-  }
-
-  const handleStopNarration = () => {
-    stopNarration()
-  }
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const subtitleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
-      stopNarration()
-      clearCaptionTimer()
-    }
-  }, [])
+      stopNarration();
+      if (subtitleTimerRef.current) clearTimeout(subtitleTimerRef.current);
+    };
+  }, []);
 
-  const activeCaption = isNarrationPlaying ? captionCues[currentCaptionIndex]?.text ?? '' : ''
+  const stopNarration = () => {
+    if (typeof window === "undefined") return;
+    window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    setIsNarrationPlaying(false);
+    setSubtitle("");
+    if (subtitleTimerRef.current) {
+      clearTimeout(subtitleTimerRef.current);
+      subtitleTimerRef.current = null;
+    }
+  };
+
+  const speak = async (text: string) => {
+    if (typeof window === "undefined") throw new Error("Speech synthesis not available");
+    if (!("speechSynthesis" in window)) throw new Error("Text-to-speech not supported in this browser");
+
+    stopNarration();
+
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    const ESTIMATED_WPS = 2.8;
+    let time = 0;
+    const cues = sentences.map((sentence) => {
+      const words = sentence.trim().split(/\s+/).length;
+      const duration = Math.max(1, Math.round(words / ESTIMATED_WPS));
+      const cue = { text: sentence.trim(), start: time, end: time + duration };
+      time += duration;
+      return cue;
+    });
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice =
+      voices.find((v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("female")) ||
+      voices.find((v) => v.lang.startsWith("en"));
+
+    if (preferredVoice) utterance.voice = preferredVoice;
+
+    utterance.onstart = () => {
+      setIsNarrationPlaying(true);
+      setIsNarrationLoading(false);
+
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(() => {});
+      }
+
+      let idx = 0;
+      setSubtitle(cues[0]?.text || "");
+
+      const showNextSubtitle = () => {
+        idx++;
+        if (idx < cues.length) {
+          setSubtitle(cues[idx].text);
+          subtitleTimerRef.current = setTimeout(
+            showNextSubtitle,
+            (cues[idx].end - cues[idx].start) * 1000
+          );
+        }
+      };
+
+      if (cues.length > 1) {
+        subtitleTimerRef.current = setTimeout(
+          showNextSubtitle,
+          (cues[0].end - cues[0].start) * 1000
+        );
+      }
+    };
+
+    utterance.onend = () => {
+      setIsNarrationPlaying(false);
+      utteranceRef.current = null;
+      setSubtitle("");
+
+      if (subtitleTimerRef.current) {
+        clearTimeout(subtitleTimerRef.current);
+        subtitleTimerRef.current = null;
+      }
+
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(() => {});
+      }
+    };
+
+    utterance.onerror = () => {
+      setIsNarrationPlaying(false);
+      utteranceRef.current = null;
+      setTtsError("Narration playback failed.");
+      setSubtitle("");
+
+      if (subtitleTimerRef.current) {
+        clearTimeout(subtitleTimerRef.current);
+        subtitleTimerRef.current = null;
+      }
+    };
+
+    utteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleGenerateShort = async () => {
+    if (isGenerating) return;
+
+    const subject = topic.trim() || "Your topic";
+    setIsGenerating(true);
+    setShowPreview(true);
+    setTtsError(null);
+    setScript("");
+    setSubtitle("");
+    setSelectedVideo(DEFAULT_SHORT_VIDEO);
+    stopNarration();
+
+    try {
+      setSelectedVideo(DEFAULT_SHORT_VIDEO);
+
+      const response = await generateShortScript(subject);
+      const generatedScript = response?.script?.trim() ?? "";
+      setScript(generatedScript);
+    } catch (err) {
+      console.error(err);
+      const fallbackScript = `Let's explore ${subject}. This is an important concept with many applications. Understanding the basics helps build a strong foundation for advanced learning. Practice regularly to master this topic.`;
+      setScript(fallbackScript);
+
+      setSelectedVideo(DEFAULT_SHORT_VIDEO);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleNarrationClick = async () => {
+    if (!script || isNarrationLoading || isNarrationPlaying) return;
+
+    setIsNarrationLoading(true);
+    setTtsError(null);
+
+    try {
+      await speak(script);
+    } catch (err) {
+      setIsNarrationLoading(false);
+      setTtsError(err instanceof Error ? err.message : "Unable to play narration");
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <CyberBorder className="max-w-6xl mx-auto">
         <div className="p-6 lg:p-8">
-          {/* Header */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">
-                <GradientText text="Quillium Shorts" gradient="cyber" />
-              </h2>
-              <p className="text-green-400/70">Snackable AI study reels are on the way.</p>
-            </div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30">
-              <span className="text-green-400">🌐</span>
-              <span className="text-white font-medium">Language: {language}</span>
-            </div>
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="text-3xl font-bold">
+              <GradientText text="Quillium Shorts" gradient="cyber" />
+            </h2>
+            <span className="text-green-400">🌐 {language}</span>
           </div>
 
-          {/* Placeholder Content */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="holographic-card p-8 rounded-2xl"
-          >
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="p-6 rounded-2xl bg-linear-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30">
-                <Clapperboard className="w-12 h-12 text-green-300" />
-              </div>
-              <div className="text-center md:text-left space-y-3">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 text-green-300 text-sm font-medium">
-                  <Sparkles className="w-4 h-4" />
-                  Coming soon
-                </div>
-                <p className="text-white text-xl font-semibold">
-                  Cinematic micro-lessons, generated from your documents.
-                </p>
-                <p className="text-white/60">
-                  We&apos;re crafting looping study shorts that remix your PDFs into fast, visual refreshers.
-                </p>
-                <div className="pt-2 w-full">
-                  <label htmlFor="quillium-shorts-topic" className="block text-white/70 text-sm font-semibold mb-2">
-                    Enter a topic
-                  </label>
-                  <input
-                    id="quillium-shorts-topic"
-                    type="text"
-                    className="cyber-input w-full text-sm"
-                    placeholder="e.g. Arrays, Binary Search, Operating Systems"
-                    value={topic}
-                    onChange={(event) => setTopic(event.target.value)}
-                  />
-                  <div className="mt-4">
-                    <HolographicButton
-                      onClick={handleGenerateShort}
-                      className="w-full"
-                      disabled={isGenerating}
-                    >
-                      {isGenerating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Generating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4" />
-                          <span>Generate Short</span>
-                        </>
-                      )}
-                    </HolographicButton>
-                  </div>
-                  {showPreview && (
-                    <div className="mt-6 flex justify-center">
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="relative w-full max-w-[390px] aspect-[9/16] rounded-[32px] border border-white/10 bg-gradient-to-b from-cyber-dark/95 via-[#0b1119] to-[#05060a] shadow-[0_20px_50px_rgba(0,0,0,0.45)] overflow-hidden"
-                      >
-                        <video
-                          className="absolute inset-0 h-full w-full object-cover z-0"
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                          aria-hidden="true"
-                        >
-                          <source src="/shorts/minecraft.mp4" type="video/mp4" />
-                        </video>
-                        <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-white/5 via-transparent to-cyber-dark/60" />
-                        <div className="relative z-20 flex h-full flex-col px-5 py-6">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xl font-bold text-white">
-                              🎬 {topic.trim() ? topic : 'Your topic'}
-                            </h4>
-                            <span className="text-xs uppercase tracking-wide text-green-300/70">Preview coming soon</span>
-                          </div>
-                          <div className="mt-4 flex-1" />
-                          <div className="mt-4 space-y-3">
-                            <HolographicButton
-                              onClick={handleNarrationClick}
-                              disabled={!script || isGenerating || isNarrationLoading || isNarrationPlaying}
-                              className="w-full"
-                            >
-                              {isNarrationLoading ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  <span>Preparing voice...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="w-4 h-4" />
-                                  <span>Play narration</span>
-                                </>
-                              )}
-                            </HolographicButton>
-                            {isNarrationPlaying && (
-                              <HolographicButton variant="ghost" onClick={handleStopNarration} className="w-full">
-                                <span>Stop narration</span>
-                              </HolographicButton>
-                            )}
-                            {ttsError && (
-                              <p className="text-red-400 text-sm text-center">{ttsError}</p>
-                            )}
-                          </div>
-                          {activeCaption && (
-                            <div className="absolute inset-x-4 bottom-6 z-30">
-                              <div className="rounded-2xl bg-black/55 px-4 py-3 text-center text-white shadow-[0_0_30px_rgba(0,0,0,0.65)] backdrop-blur-md">
-                                <p className="text-2xl font-extrabold leading-snug tracking-wide drop-shadow-[0_4px_25px_rgba(0,0,0,0.85)]">
-                                  {activeCaption}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <input
+            className="cyber-input w-full mb-4"
+            placeholder="e.g. Binary Search, OS Scheduling, Machine Learning"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+          />
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
+          <HolographicButton
+            onClick={handleGenerateShort}
+            disabled={isGenerating}
+            className="w-full mb-8"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Generating Short...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Generate Short</span>
+              </>
+            )}
+          </HolographicButton>
+
+          {showPreview && selectedVideo && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center space-y-6"
+            >
+              <div className="relative w-[360px] h-[640px] sm:w-[400px] sm:h-[711px] rounded-3xl overflow-hidden border-4 border-white/10 bg-black shadow-2xl">
+                <video
+                  ref={videoRef}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  src={`/shorts/${selectedVideo}`}
+                  muted
+                  loop
+                  playsInline
+                  autoPlay
+                />
+
+                {topic && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 w-[90%] flex justify-center z-10">
+                    <div className="bg-gradient-to-r from-cyan-500/90 to-purple-500/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-xl">
+                      <p className="text-white font-bold text-center text-sm">
+                        {topic}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {subtitle && (
+                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[90%] flex justify-center z-10">
+                    <motion.div
+                      key={subtitle}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-black/85 backdrop-blur-sm px-6 py-3 rounded-xl shadow-2xl max-w-[90%] border border-white/10"
+                    >
+                      <p className="text-white text-lg font-medium text-center drop-shadow-lg leading-relaxed">
+                        {subtitle}
+                      </p>
+                    </motion.div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <HolographicButton
+                  onClick={handleNarrationClick}
+                  disabled={!script || isNarrationLoading || isNarrationPlaying}
+                  className="w-full max-w-xs mx-auto"
+                >
+                  {isNarrationLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Preparing voice...</span>
+                    </>
+                  ) : isNarrationPlaying ? (
+                    <>
+                      <Volume2 className="w-4 h-4" />
+                      <span>Narration Playing</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Play with Narration</span>
+                    </>
+                  )}
+                </HolographicButton>
+
+                {isNarrationPlaying && (
+                  <HolographicButton
+                    variant="ghost"
+                    onClick={stopNarration}
+                    className="w-full max-w-xs mx-auto"
+                  >
+                    <Pause className="w-4 h-4" />
+                    <span>Stop Narration</span>
+                  </HolographicButton>
+                )}
+              </div>
+
+              {ttsError && (
+                <p className="text-red-400 text-sm text-center">{ttsError}</p>
+              )}
+            </motion.div>
+          )}
+
+          <div className="mt-10 flex justify-center">
             <HolographicButton onClick={onBack} variant="ghost">
               <ChevronLeft className="w-4 h-4" />
               <span>Back to Upload</span>
-            </HolographicButton>
-            <HolographicButton disabled>
-              <Sparkles className="w-4 h-4" />
-              <span>Shorts beta unlocking soon</span>
             </HolographicButton>
           </div>
         </div>
       </CyberBorder>
     </div>
-  )
-}
+  );
+};

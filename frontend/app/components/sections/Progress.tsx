@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { useMemo } from 'react'
 import { 
   Trophy, 
   Target, 
@@ -9,8 +10,8 @@ import {
   Brain, 
   Award,
   Zap,
-  RefreshCw,
-  BarChart3
+  BarChart3,
+  AlertTriangle
 } from 'lucide-react'
 import { GradientText } from '../ui/GradientText'
 import { HolographicButton } from '../ui/HolographicButton'
@@ -24,7 +25,7 @@ interface ProgressDashboardProps {
   language?: string
 }
 
-export const ProgressDashboard = ({ progress, onBack,language='English' }: ProgressDashboardProps) => {
+export const ProgressDashboard = ({ progress, onBack, language = 'English' }: ProgressDashboardProps) => {
   const totalQuestions = progress.totalQuestions
   const accuracy = totalQuestions > 0 
     ? (progress.correctAnswers / totalQuestions) * 100 
@@ -88,6 +89,78 @@ export const ProgressDashboard = ({ progress, onBack,language='English' }: Progr
       description: 'Complete 3+ quizzes'
     }
   ]
+
+  const { weakAreas, hasTopicData } = useMemo(() => {
+    const total = progress.totalQuestions
+    const overallAccuracy = total > 0 ? (progress.correctAnswers / total) * 100 : 0
+
+    const topicStatsSource =
+      progress.topicStats ??
+      (progress as Record<string, unknown> & { topicBreakdown?: unknown }).topicBreakdown ??
+      (progress as Record<string, unknown> & { topics?: unknown }).topics ??
+      null
+
+    const normalized: Array<{ topic: string; accuracy: number; total: number }> = []
+
+    const pushNormalized = (topic: unknown, value: Record<string, unknown>) => {
+      const topicName = typeof topic === 'string' && topic.trim().length > 0 ? topic.trim() :
+        (typeof value.topic === 'string' && value.topic.trim().length > 0 ? value.topic.trim() :
+        typeof value.name === 'string' && value.name.trim().length > 0 ? value.name.trim() :
+        typeof value.title === 'string' && value.title.trim().length > 0 ? value.title.trim() :
+        undefined)
+
+      if (!topicName) {
+        return
+      }
+
+      const correctRaw = value.correct ?? value.correctAnswers ?? value.right ?? 0
+      const incorrectRaw = value.incorrect ?? value.wrong ?? 0
+      const totalRaw = value.total ?? value.questions ?? (typeof correctRaw === 'number' && typeof incorrectRaw === 'number'
+        ? correctRaw + incorrectRaw
+        : undefined)
+
+      const correct = typeof correctRaw === 'number' ? Math.max(0, correctRaw) : 0
+      const totalResolved = typeof totalRaw === 'number' ? Math.max(0, totalRaw) : (typeof correctRaw === 'number' && typeof incorrectRaw === 'number'
+        ? Math.max(0, correctRaw + incorrectRaw)
+        : 0)
+
+      if (totalResolved <= 0) {
+        normalized.push({ topic: topicName, accuracy: 0, total: 0 })
+        return
+      }
+
+      const accuracyValue = (correct / totalResolved) * 100
+      normalized.push({ topic: topicName, accuracy: accuracyValue, total: totalResolved })
+    }
+
+    if (Array.isArray(topicStatsSource)) {
+      topicStatsSource.forEach((entry) => {
+        if (entry && typeof entry === 'object') {
+          const candidate = entry as Record<string, unknown>
+          pushNormalized(undefined, candidate)
+        }
+      })
+    } else if (topicStatsSource && typeof topicStatsSource === 'object') {
+      Object.entries(topicStatsSource as Record<string, unknown>).forEach(([key, value]) => {
+        if (value && typeof value === 'object') {
+          pushNormalized(key, value as Record<string, unknown>)
+        }
+      })
+    }
+
+    const withTotals = normalized.filter((entry) => entry.total > 0)
+
+    if (withTotals.length === 0) {
+      return { weakAreas: [] as Array<{ topic: string; accuracy: number }>, hasTopicData: false }
+    }
+
+    const weak = withTotals
+      .filter((entry) => entry.accuracy < overallAccuracy)
+      .sort((a, b) => a.accuracy - b.accuracy)
+      .map((entry) => ({ topic: entry.topic, accuracy: Number(entry.accuracy.toFixed(1)) }))
+
+    return { weakAreas: weak, hasTopicData: true }
+  }, [progress])
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -359,6 +432,50 @@ export const ProgressDashboard = ({ progress, onBack,language='English' }: Progr
           </div>
 
           
+          {/* Weak Areas */}
+          <div className="holographic-card p-6 rounded-2xl mt-8">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <AlertTriangle className="w-6 h-6 text-amber-400" />
+              Weak Areas
+            </h3>
+
+            {!hasTopicData ? (
+              <div className="rounded-2xl border border-white/20 bg-linear-to-r from-sky-500/10 to-purple-500/10 px-4 py-6 text-center">
+                <p className="text-white/80 font-semibold">Weak areas will appear after you complete more quizzes.</p>
+                <p className="text-white/60 text-sm mt-2">Take a few quizzes to unlock topic-level insights.</p>
+              </div>
+            ) : weakAreas.length === 0 ? (
+              <div className="rounded-2xl border border-green-500/30 bg-linear-to-r from-green-500/10 to-emerald-500/10 px-4 py-6 text-center">
+                <p className="text-green-300 font-semibold">Great job! No weak areas detected yet.</p>
+                <p className="text-white/60 text-sm mt-2">Keep reinforcing your strengths and explore new topics to stay sharp.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {weakAreas.map((item) => (
+                  <div
+                    key={item.topic}
+                    className="rounded-2xl border border-amber-500/20 bg-linear-to-r from-red-500/10 via-amber-500/10 to-yellow-500/10 p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-white font-semibold">{item.topic}</p>
+                        <p className="text-white/60 text-xs">Focus here to boost your next quiz.</p>
+                      </div>
+                      <span className="text-white font-bold text-lg">{item.accuracy.toFixed(1)}%</span>
+                    </div>
+                    <div className="mt-3 h-2 bg-black/40 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-linear-to-r from-red-400 via-amber-400 to-yellow-400 rounded-full"
+                        style={{ width: `${Math.max(2, Math.min(100, item.accuracy))}%` }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
       </CyberBorder>
     </div>

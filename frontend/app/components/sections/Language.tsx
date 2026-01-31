@@ -57,10 +57,19 @@ export const LanguageSelector = ({ selectedLanguage, onLanguageChange }: Languag
   const allLanguages = Object.values(languages).flat()
   const selectedLang = allLanguages.find(lang => lang.name === selectedLanguage) || allLanguages[0]
 
-  const filteredLanguages = allLanguages.filter(lang =>
-    lang.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    lang.nativeName.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+
+  const filteredLanguageGroups = Object.entries(languages).map(([groupName, groupLanguages]) => {
+    const matches = groupLanguages.filter((lang) => {
+      if (!normalizedSearch) {
+        return true
+      }
+      const lowerName = lang.name.toLowerCase()
+      const lowerNative = lang.nativeName.toLowerCase()
+      return lowerName.includes(normalizedSearch) || lowerNative.includes(normalizedSearch)
+    })
+    return { groupName, matches }
+  }).filter(({ matches }) => matches.length > 0)
 
   const handleLanguageSelect = (languageName: string) => {
     onLanguageChange(languageName)
@@ -106,29 +115,38 @@ export const LanguageSelector = ({ selectedLanguage, onLanguageChange }: Languag
             </div>
 
             {/* Language List */}
-            <div className="space-y-2">
-              {filteredLanguages.length > 0 ? (
-                filteredLanguages.map((lang) => (
-                  <button
-                    key={lang.code}
-                    onClick={() => handleLanguageSelect(lang.name)}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
-                      selectedLanguage === lang.name
-                        ? 'bg-linear-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30'
-                        : 'hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{lang.flag}</span>
-                      <div className="text-left">
-                        <div className="font-medium text-white">{lang.name}</div>
-                        <div className="text-sm text-white/60">{lang.nativeName}</div>
-                      </div>
+            <div className="max-h-72 overflow-y-auto pr-1 space-y-4">
+              {filteredLanguageGroups.length > 0 ? (
+                filteredLanguageGroups.map(({ groupName, matches }) => (
+                  <div key={groupName} className="space-y-2">
+                    <div className="text-xs uppercase tracking-wide text-white/50">
+                      {groupName}
                     </div>
-                    {selectedLanguage === lang.name && (
-                      <Check className="w-5 h-5 text-cyan-400" />
-                    )}
-                  </button>
+                    <div className="space-y-2">
+                      {matches.map((lang) => (
+                        <button
+                          key={lang.code}
+                          onClick={() => handleLanguageSelect(lang.name)}
+                          className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
+                            selectedLanguage === lang.name
+                              ? 'bg-linear-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30'
+                              : 'hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{lang.flag}</span>
+                            <div className="text-left">
+                              <div className="font-medium text-white">{lang.name}</div>
+                              <div className="text-sm text-white/60">{lang.nativeName}</div>
+                            </div>
+                          </div>
+                          {selectedLanguage === lang.name && (
+                            <Check className="w-5 h-5 text-cyan-400" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))
               ) : (
                 <div className="text-center py-4 text-white/60">

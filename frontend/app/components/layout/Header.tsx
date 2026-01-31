@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Menu, X, Zap, Upload, Brain, Layers, BarChart3, Home, LeafIcon, LeafyGreen, Clapperboard } from 'lucide-react'
+import { Menu, X, Zap, Upload, Brain, Layers, BarChart3, Home, LeafIcon, LeafyGreen, Clapperboard, Sparkles } from 'lucide-react'
 import { GradientText } from '../ui/GradientText'
 import { cn } from '../../../lib/utils'
 
@@ -17,13 +17,13 @@ interface HeaderProps {
 export const Header = ({ currentView = 'hero', onNavigate = () => {}, hasData = false }: HeaderProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
-  const navItems: Array<{ id: View; icon: typeof Home; label: string; disabled?: boolean }> = [
+  const navItems: Array<{ id: View; icon: typeof Home; label: string; disabled?: boolean; special?: boolean }> = [
     { id: 'hero', icon: Home, label: 'Home' },
     { id: 'upload', icon: Upload, label: 'Upload' },
     { id: 'quiz', icon: Brain, label: 'Quiz', disabled: !hasData },
     { id: 'flashcards', icon: Layers, label: 'Cards', disabled: !hasData },
     { id: 'progress', icon: BarChart3, label: 'Stats' },
-    { id: 'shorts', icon: Clapperboard, label: 'Quillium Shorts' },
+    { id: 'shorts', icon: Clapperboard, label: 'Quillium Shorts', special: true },
   ]
 
   return (
@@ -54,6 +54,7 @@ export const Header = ({ currentView = 'hero', onNavigate = () => {}, hasData = 
             {navItems.map((item) => {
               const isActive = currentView === item.id
               const Icon = item.icon
+              const isSpecial = item.special
 
               return (
                 <button
@@ -62,20 +63,38 @@ export const Header = ({ currentView = 'hero', onNavigate = () => {}, hasData = 
                   disabled={item.disabled}
                   className={cn(
                     'relative flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-medium text-sm uppercase tracking-wider',
-                    isActive
+                    isActive && isSpecial
+                      ? 'bg-linear-to-r from-purple-500/25 to-pink-500/25 text-purple-300 border border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                      : isActive && !isSpecial
                       ? 'bg-linear-to-r from-green-500/20 to-emerald-500/20 text-green-300 border border-green-500/30'
                       : item.disabled
                       ? 'opacity-30 cursor-not-allowed text-gray-500'
+                      : isSpecial
+                      ? 'text-white/70 hover:text-purple-300 hover:border hover:border-purple-500/30 hover:shadow-[0_0_10px_rgba(168,85,247,0.2)] hover:bg-purple-500/10'
                       : 'text-white/70 hover:text-green-400 hover:border hover:border-green-500/30'
                   )}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <Icon className={cn(
+                    'w-4 h-4',
+                    isActive && isSpecial && 'text-purple-300',
+                    !isActive && isSpecial && 'text-purple-400'
+                  )} />
+                  <span className="relative">
+                    {item.label}
+                    {isSpecial && !isActive && (
+                      <Sparkles className="absolute -top-1 -right-3 w-2 h-2 text-pink-400" />
+                    )}
+                  </span>
                   
                   {isActive && (
                     <motion.div
                       layoutId="activeIndicator"
-                      className="absolute -bottom-1 left-2 right-2 h-0.5 bg-green-400 rounded-full"
+                      className={cn(
+                        'absolute -bottom-1 left-2 right-2 h-0.5 rounded-full',
+                        isSpecial 
+                          ? 'bg-gradient-to-r from-purple-400 to-pink-400 shadow-[0_0_8px_rgba(168,85,247,0.5)]' 
+                          : 'bg-green-400'
+                      )}
                     />
                   )}
                 </button>
@@ -107,6 +126,7 @@ export const Header = ({ currentView = 'hero', onNavigate = () => {}, hasData = 
             {navItems.map((item) => {
               const isActive = currentView === item.id
               const Icon = item.icon
+              const isSpecial = item.special
 
               return (
                 <button
@@ -118,15 +138,28 @@ export const Header = ({ currentView = 'hero', onNavigate = () => {}, hasData = 
                   disabled={item.disabled}
                   className={cn(
                     'w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-medium',
-                    isActive
+                    isActive && isSpecial
+                      ? 'bg-linear-to-r from-purple-500/25 to-pink-500/25 text-purple-300 border border-purple-500/40'
+                      : isActive && !isSpecial
                       ? 'bg-linear-to-r from-green-500/20 to-emerald-500/20 text-green-300'
                       : item.disabled
                       ? 'opacity-30 cursor-not-allowed text-gray-500'
+                      : isSpecial
+                      ? 'text-white/70 hover:text-purple-300 hover:bg-purple-500/10'
                       : 'text-white/70 hover:text-green-400'
                   )}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <Icon className={cn(
+                    'w-4 h-4',
+                    isActive && isSpecial && 'text-purple-300',
+                    !isActive && isSpecial && 'text-purple-400'
+                  )} />
+                  <span className="flex items-center gap-1">
+                    {item.label}
+                    {isSpecial && !isActive && (
+                      <Sparkles className="w-3 h-3 text-pink-400" />
+                    )}
+                  </span>
                 </button>
               )
             })}
