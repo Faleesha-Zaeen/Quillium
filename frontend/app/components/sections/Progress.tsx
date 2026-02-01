@@ -96,8 +96,8 @@ export const ProgressDashboard = ({ progress, onBack, language = 'English' }: Pr
 
     const topicStatsSource =
       progress.topicStats ??
-      (progress as Record<string, unknown> & { topicBreakdown?: unknown }).topicBreakdown ??
-      (progress as Record<string, unknown> & { topics?: unknown }).topics ??
+      ((progress as unknown) as Record<string, unknown> & { topicBreakdown?: unknown }).topicBreakdown ??
+      ((progress as unknown) as Record<string, unknown> & { topics?: unknown }).topics ??
       null
 
     const normalized: Array<{ topic: string; accuracy: number; total: number }> = []
