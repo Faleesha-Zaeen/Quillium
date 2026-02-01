@@ -75,6 +75,7 @@ app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 default_dev_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://quillium.vercel.app",
 ]
 env_origins = os.getenv("ALLOWED_ORIGINS", "")
 allowed_origins = env_origins.split(",") if env_origins else default_dev_origins
