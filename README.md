@@ -133,8 +133,7 @@ Troubleshooting
 Developer Notes
 ---------------
 - Keep backend & frontend terminals open for auto-reload.
-- Update `backend/requirements.txt` after adding new Python packages: `pip freeze > requirements.txt`.
+- Update `backend/requirements.txt` after adding new Python packages: `pip freeze > requirements.txt`
 - Run `npm run lint` (if configured) before committing frontend changes.
-
 
 
